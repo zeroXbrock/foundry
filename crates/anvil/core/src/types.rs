@@ -1,93 +1,12 @@
 use alloy_primitives::{Address, Bytes, TxHash, B256, U128, U256, U64};
-use alloy_rpc_types::{other::OtherFields, AccessListItem, Signature};
+use alloy_rpc_types::{AccessListItem, Signature};
+use alloy_serde::OtherFields;
 use revm::primitives::SpecId;
-use serde::{Deserialize, Serialize};
+use serde::{de::Error, Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[cfg(feature = "serde")]
-use serde::{de::Error, Deserializer, Serializer};
-
-/// Represents the params to set forking which can take various forms
-///  - untagged
-///  - tagged `forking`
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Forking {
-    pub json_rpc_url: Option<String>,
-    pub block_number: Option<u64>,
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for Forking {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(serde::Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct ForkOpts {
-            pub json_rpc_url: Option<String>,
-            #[serde(
-                default,
-                deserialize_with = "crate::eth::serde_helpers::numeric::deserialize_stringified_u64_opt"
-            )]
-            pub block_number: Option<u64>,
-        }
-
-        #[derive(serde::Deserialize)]
-        struct Tagged {
-            forking: ForkOpts,
-        }
-        #[derive(serde::Deserialize)]
-        #[serde(untagged)]
-        enum ForkingVariants {
-            Tagged(Tagged),
-            Fork(ForkOpts),
-        }
-        let f = match ForkingVariants::deserialize(deserializer)? {
-            ForkingVariants::Fork(ForkOpts { json_rpc_url, block_number }) => {
-                Forking { json_rpc_url, block_number }
-            }
-            ForkingVariants::Tagged(f) => Forking {
-                json_rpc_url: f.forking.json_rpc_url,
-                block_number: f.forking.block_number,
-            },
-        };
-        Ok(f)
-    }
-}
-
-/// Additional `evm_mine` options
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(untagged))]
-pub enum EvmMineOptions {
-    Options {
-        #[cfg_attr(
-            feature = "serde",
-            serde(
-                deserialize_with = "crate::eth::serde_helpers::numeric::deserialize_stringified_u64_opt"
-            )
-        )]
-        timestamp: Option<u64>,
-        // If `blocks` is given, it will mine exactly blocks number of blocks, regardless of any
-        // other blocks mined or reverted during it's operation
-        blocks: Option<u64>,
-    },
-    /// The timestamp the block should be mined with
-    #[cfg_attr(
-        feature = "serde",
-        serde(
-            deserialize_with = "crate::eth::serde_helpers::numeric::deserialize_stringified_u64_opt"
-        )
-    )]
-    Timestamp(Option<u64>),
-}
-
-impl Default for EvmMineOptions {
-    fn default() -> Self {
-        EvmMineOptions::Options { timestamp: None, blocks: None }
-    }
-}
+use serde::Serializer;
 
 /// Represents the result of `eth_getWork`
 /// This may or may not include the block number
@@ -301,7 +220,8 @@ pub struct TransactionSuavex {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use alloy_rpc_types::anvil::Forking;
+    // use super::*;
 
     #[test]
     fn serde_forking() {

@@ -3,11 +3,13 @@
 //! The design is similar to the single `SharedBackend`, `BackendHandler` but supports multiple
 //! concurrently active pairs at once.
 
-use crate::fork::{BackendHandler, BlockchainDb, BlockchainDbMeta, CreateFork, SharedBackend};
-use alloy_providers::provider::Provider;
-use alloy_transport::BoxTransport;
-use foundry_common::provider::alloy::ProviderBuilder;
+use super::CreateFork;
+use alloy_transport::layers::RetryBackoffService;
+use foundry_common::provider::{
+    runtime_transport::RuntimeTransport, ProviderBuilder, RetryProvider,
+};
 use foundry_config::Config;
+use foundry_fork_db::{cache::BlockchainDbMeta, BackendHandler, BlockchainDb, SharedBackend};
 use futures::{
     channel::mpsc::{channel, Receiver, Sender},
     stream::{Fuse, Stream},
@@ -41,7 +43,7 @@ impl ForkId {
             Some(n) => write!(id, "{n:#x}").unwrap(),
             None => id.push_str("latest"),
         }
-        ForkId(id)
+        Self(id)
     }
 
     /// Returns the identifier of the fork.
@@ -65,6 +67,7 @@ impl<T: Into<String>> From<T> for ForkId {
 /// The Sender half of multi fork pair.
 /// Can send requests to the `MultiForkHandler` to create forks
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct MultiFork {
     /// Channel to send `Request`s to the handler
     handler: Sender<Request>,
@@ -72,18 +75,9 @@ pub struct MultiFork {
     _shutdown: Arc<ShutDownMultiFork>,
 }
 
-// === impl MultiForkBackend ===
-
 impl MultiFork {
-    /// Creates a new pair multi fork pair
-    pub fn new() -> (Self, MultiForkHandler) {
-        let (handler, handler_rx) = channel(1);
-        let _shutdown = Arc::new(ShutDownMultiFork { handler: Some(handler.clone()) });
-        (Self { handler, _shutdown }, MultiForkHandler::new(handler_rx))
-    }
-
     /// Creates a new pair and spawns the `MultiForkHandler` on a background thread.
-    pub async fn spawn() -> Self {
+    pub fn spawn() -> Self {
         trace!(target: "fork::multi", "spawning multifork");
 
         let (fork, mut handler) = Self::new();
@@ -109,6 +103,16 @@ impl MultiFork {
             .expect("failed to spawn thread");
         trace!(target: "fork::multi", "spawned MultiForkHandler thread");
         fork
+    }
+
+    /// Creates a new pair multi fork pair.
+    ///
+    /// Use [`spawn`](Self::spawn) instead.
+    #[doc(hidden)]
+    pub fn new() -> (Self, MultiForkHandler) {
+        let (handler, handler_rx) = channel(1);
+        let _shutdown = Arc::new(ShutDownMultiFork { handler: Some(handler.clone()) });
+        (Self { handler, _shutdown }, MultiForkHandler::new(handler_rx))
     }
 
     /// Returns a fork backend
@@ -169,7 +173,7 @@ impl MultiFork {
     }
 }
 
-type Handler = BackendHandler<Arc<Provider<BoxTransport>>>;
+type Handler = BackendHandler<RetryBackoffService<RuntimeTransport>, Arc<RetryProvider>>;
 
 type CreateFuture =
     Pin<Box<dyn Future<Output = eyre::Result<(ForkId, CreatedFork, Handler)>> + Send>>;
@@ -221,8 +225,6 @@ pub struct MultiForkHandler {
     /// Optional periodic interval to flush rpc cache
     flush_cache_interval: Option<tokio::time::Interval>,
 }
-
-// === impl MultiForkHandler ===
 
 impl MultiForkHandler {
     fn new(incoming: Receiver<Request>) -> Self {
@@ -438,8 +440,6 @@ struct CreatedFork {
     num_senders: Arc<AtomicUsize>,
 }
 
-// === impl CreatedFork ===
-
 impl CreatedFork {
     pub fn new(opts: CreateFork, backend: SharedBackend) -> Self {
         Self { opts, backend, num_senders: Arc::new(AtomicUsize::new(1)) }
@@ -500,7 +500,7 @@ async fn create_fork(mut fork: CreateFork) -> eyre::Result<(ForkId, CreatedFork,
 
     // we need to use the block number from the block because the env's number can be different on
     // some L2s (e.g. Arbitrum).
-    let number = block.header.number.unwrap_or(meta.block_env.number).to::<u64>();
+    let number = block.header.number.unwrap_or(meta.block_env.number.to());
 
     // determine the cache path if caching is enabled
     let cache_path = if fork.enable_caching {

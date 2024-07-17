@@ -1,12 +1,14 @@
 use crate::Vm;
-use alloy_primitives::{Address, Bytes};
-use alloy_signer::{Error as SignerError, WalletError};
+use alloy_primitives::{hex, Address, Bytes};
+use alloy_signer::Error as SignerError;
+use alloy_signer_local::LocalSignerError;
 use alloy_sol_types::SolError;
 use foundry_common::errors::FsPathError;
 use foundry_config::UnresolvedEnvVarError;
-use foundry_evm_core::backend::DatabaseError;
+use foundry_evm_core::backend::{BackendError, DatabaseError};
 use foundry_wallets::error::WalletSignerError;
 use k256::ecdsa::signature::Error as SignatureError;
+use revm::primitives::EVMError;
 use std::{borrow::Cow, fmt};
 
 /// Cheatcode result type.
@@ -284,10 +286,12 @@ macro_rules! impl_from {
 
 impl_from!(
     alloy_sol_types::Error,
+    alloy_dyn_abi::Error,
     alloy_primitives::SignatureError,
     FsPathError,
     hex::FromHexError,
     eyre::Error,
+    BackendError,
     DatabaseError,
     jsonpath_lib::JsonPathError,
     serde_json::Error,
@@ -297,10 +301,17 @@ impl_from!(
     std::str::Utf8Error,
     std::string::FromUtf8Error,
     UnresolvedEnvVarError,
-    WalletError,
+    LocalSignerError,
     SignerError,
     WalletSignerError,
 );
+
+impl<T: Into<BackendError>> From<EVMError<T>> for Error {
+    #[inline]
+    fn from(err: EVMError<T>) -> Self {
+        Self::display(BackendError::from(err))
+    }
+}
 
 #[cfg(test)]
 mod tests {
