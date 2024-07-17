@@ -311,7 +311,7 @@ impl CompiledState {
             // those.
             let Some(schema) = resolver.resolve_struct_eip712(id, &mut Default::default(), true)?
             else {
-                continue
+                continue;
             };
 
             if !include.is_empty() {
@@ -378,7 +378,7 @@ impl StructsState {
         for (name, paths) in names_to_paths {
             if paths.len() <= 1 {
                 // no alias needed
-                continue
+                continue;
             }
 
             for (i, path) in paths.into_iter().enumerate() {

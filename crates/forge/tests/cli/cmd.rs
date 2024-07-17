@@ -519,7 +519,7 @@ forgetest!(can_clone_keep_directory_structure, |prj, cmd| {
         // Gateway</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
 
         eprintln!("Skipping test due to 502 Bad Gateway: {}", cmd.make_error_message(&out, false));
-        return
+        return;
     }
     cmd.ensure_success(&out).unwrap();
 

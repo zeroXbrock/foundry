@@ -663,7 +663,7 @@ fn resolve_type(type_description: &str) -> Result<DynSolType> {
             resolver.ingest(t.to_owned());
         }
 
-        return Ok(resolver.resolve(main_type)?)
+        return Ok(resolver.resolve(main_type)?);
     };
 
     bail!("type description should be a valid Solidity type or a EIP712 `encodeType` string")

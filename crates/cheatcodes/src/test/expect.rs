@@ -456,7 +456,7 @@ pub(crate) fn handle_expect_emit(state: &mut Cheatcodes, log: &alloy_primitives:
     // This allows a contract to arbitrarily emit more events than expected (additive behavior),
     // as long as all the previous events were matched in the order they were expected to be.
     if state.expected_emits.iter().all(|expected| expected.found) {
-        return
+        return;
     }
 
     // If there's anything to fill, we need to pop back.
@@ -478,13 +478,13 @@ pub(crate) fn handle_expect_emit(state: &mut Cheatcodes, log: &alloy_primitives:
             event_to_fill_or_check.log = Some(log.data.clone());
         }
         state.expected_emits.push_back(event_to_fill_or_check);
-        return
+        return;
     };
 
     event_to_fill_or_check.found = || -> bool {
         // Topic count must match.
         if expected.topics().len() != log.topics().len() {
-            return false
+            return false;
         }
         // Match topics according to the checks.
         if !log
@@ -494,7 +494,7 @@ pub(crate) fn handle_expect_emit(state: &mut Cheatcodes, log: &alloy_primitives:
             .filter(|(i, _)| event_to_fill_or_check.checks[*i])
             .all(|(i, topic)| topic == &expected.topics()[i])
         {
-            return false
+            return false;
         }
         // Maybe match source address.
         if event_to_fill_or_check.address.map_or(false, |addr| addr != log.address) {
@@ -502,7 +502,7 @@ pub(crate) fn handle_expect_emit(state: &mut Cheatcodes, log: &alloy_primitives:
         }
         // Maybe match data.
         if event_to_fill_or_check.checks[4] && expected.data.as_ref() != log.data.data.as_ref() {
-            return false
+            return false;
         }
 
         true

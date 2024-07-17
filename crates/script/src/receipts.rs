@@ -44,14 +44,14 @@ pub async fn check_tx_status(
                 .get_receipt()
                 .await
             {
-                return Ok(receipt.into())
+                return Ok(receipt.into());
             }
 
             if provider.get_transaction_by_hash(hash).await?.is_some() {
                 trace!("tx is still known to the node, waiting for receipt");
             } else {
                 trace!("eth_getTransactionByHash returned null, assuming dropped");
-                break
+                break;
             }
         }
 
