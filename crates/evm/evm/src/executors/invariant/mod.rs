@@ -338,7 +338,9 @@ impl<'a> InvariantExecutor<'a> {
                         invariant_test.set_error(InvariantFuzzError::MaxAssumeRejects(
                             self.config.max_assume_rejects,
                         ));
-                        return Err(TestCaseError::fail("Max number of vm.assume rejects reached."));
+                        return Err(TestCaseError::fail(
+                            "Max number of vm.assume rejects reached.",
+                        ));
                     }
                 } else {
                     // Collect data for fuzzing from the state changeset.
