@@ -1,4 +1,4 @@
-//! Implementations of [`Testing`](crate::Group::Testing) cheatcodes.
+//! Implementations of [`Testing`](spec::Group::Testing) cheatcodes.
 
 use crate::{Cheatcode, Cheatcodes, CheatsCtxt, DatabaseExt, Error, Result, Vm::*};
 use alloy_primitives::Address;
@@ -20,14 +20,14 @@ impl Cheatcode for assumeCall {
 }
 
 impl Cheatcode for breakpoint_0Call {
-    fn apply_full<DB: DatabaseExt>(&self, ccx: &mut CheatsCtxt<DB>) -> Result {
+    fn apply_stateful<DB: DatabaseExt>(&self, ccx: &mut CheatsCtxt<DB>) -> Result {
         let Self { char } = self;
         breakpoint(ccx.state, &ccx.caller, char, true)
     }
 }
 
 impl Cheatcode for breakpoint_1Call {
-    fn apply_full<DB: DatabaseExt>(&self, ccx: &mut CheatsCtxt<DB>) -> Result {
+    fn apply_stateful<DB: DatabaseExt>(&self, ccx: &mut CheatsCtxt<DB>) -> Result {
         let Self { char, value } = self;
         breakpoint(ccx.state, &ccx.caller, char, *value)
     }
@@ -64,12 +64,12 @@ impl Cheatcode for sleepCall {
 }
 
 impl Cheatcode for skipCall {
-    fn apply_full<DB: DatabaseExt>(&self, ccx: &mut CheatsCtxt<DB>) -> Result {
+    fn apply_stateful<DB: DatabaseExt>(&self, ccx: &mut CheatsCtxt<DB>) -> Result {
         let Self { skipTest } = *self;
         if skipTest {
             // Skip should not work if called deeper than at test level.
             // Since we're not returning the magic skip bytes, this will cause a test failure.
-            ensure!(ccx.data.journaled_state.depth() <= 1, "`skip` can only be used at test level");
+            ensure!(ccx.ecx.journaled_state.depth() <= 1, "`skip` can only be used at test level");
             Err(MAGIC_SKIP.into())
         } else {
             Ok(Default::default())

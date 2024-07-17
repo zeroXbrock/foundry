@@ -27,38 +27,9 @@ pub mod sequence {
             return Err(serde::de::Error::custom(format!(
                 "expected params sequence with length 1 but got {}",
                 seq.len()
-            )))
+            )));
         }
         Ok(seq.remove(0))
-    }
-}
-
-pub mod numeric {
-    use alloy_primitives::U256;
-    use serde::{Deserialize, Deserializer};
-    /// Supports parsing u64
-    ///
-    /// See <https://github.com/gakonst/ethers-rs/issues/1507>
-    pub fn deserialize_stringified_u64_opt<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if let Some(num) = Option::<U256>::deserialize(deserializer)? {
-            num.try_into().map(Some).map_err(serde::de::Error::custom)
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Supports parsing u64
-    ///
-    /// See <https://github.com/gakonst/ethers-rs/issues/1507>
-    pub fn deserialize_stringified_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let num = U256::deserialize(deserializer)?;
-        num.try_into().map_err(serde::de::Error::custom)
     }
 }
 
@@ -75,7 +46,7 @@ pub mod empty_params {
             return Err(serde::de::Error::custom(format!(
                 "expected params sequence with length 0 but got {}",
                 seq.len()
-            )))
+            )));
         }
         Ok(())
     }

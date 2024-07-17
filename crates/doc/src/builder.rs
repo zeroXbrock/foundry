@@ -3,9 +3,8 @@ use crate::{
     ParseSource, Parser, Preprocessor,
 };
 use forge_fmt::{FormatterConfig, Visitable};
-use foundry_common::glob::expand_globs;
-use foundry_compilers::utils::source_files_iter;
-use foundry_config::DocConfig;
+use foundry_compilers::{compilers::solc::SOLC_EXTENSIONS, utils::source_files_iter};
+use foundry_config::{filter::expand_globs, DocConfig};
 use itertools::Itertools;
 use mdbook::MDBook;
 use rayon::prelude::*;
@@ -101,16 +100,20 @@ impl DocBuilder {
         let ignored = expand_globs(&self.root, self.config.ignore.iter())?;
 
         // Collect and parse source files
-        let sources = source_files_iter(&self.sources)
+        let sources = source_files_iter(&self.sources, SOLC_EXTENSIONS)
             .filter(|file| !ignored.contains(file))
             .collect::<Vec<_>>();
 
         if sources.is_empty() {
             println!("No sources detected at {}", self.sources.display());
-            return Ok(())
+            return Ok(());
         }
 
-        let library_sources = self.libraries.iter().flat_map(source_files_iter).collect::<Vec<_>>();
+        let library_sources = self
+            .libraries
+            .iter()
+            .flat_map(|lib| source_files_iter(lib, SOLC_EXTENSIONS))
+            .collect::<Vec<_>>();
 
         let combined_sources = sources
             .iter()
@@ -382,7 +385,7 @@ impl DocBuilder {
         depth: usize,
     ) -> eyre::Result<()> {
         if files.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         if let Some(path) = base_path {

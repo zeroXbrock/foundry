@@ -1,4 +1,4 @@
-//! Helpers to automatically fix configuration warnings
+//! Helpers to automatically fix configuration warnings.
 
 use crate::{Config, Warning};
 use figment::providers::Env;
@@ -10,32 +10,36 @@ use std::{
 
 /// A convenience wrapper around a TOML document and the path it was read from
 struct TomlFile {
-    doc: toml_edit::Document,
+    doc: toml_edit::DocumentMut,
     path: PathBuf,
 }
 
 impl TomlFile {
-    fn open(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
+    fn open(path: impl AsRef<Path>) -> eyre::Result<Self> {
         let path = path.as_ref().to_owned();
         let doc = fs::read_to_string(&path)?.parse()?;
         Ok(Self { doc, path })
     }
-    fn doc(&self) -> &toml_edit::Document {
+
+    fn doc(&self) -> &toml_edit::DocumentMut {
         &self.doc
     }
-    fn doc_mut(&mut self) -> &mut toml_edit::Document {
+
+    fn doc_mut(&mut self) -> &mut toml_edit::DocumentMut {
         &mut self.doc
     }
+
     fn path(&self) -> &Path {
         self.path.as_ref()
     }
+
     fn save(&self) -> io::Result<()> {
         fs::write(self.path(), self.doc().to_string())
     }
 }
 
 impl Deref for TomlFile {
-    type Target = toml_edit::Document;
+    type Target = toml_edit::DocumentMut;
     fn deref(&self) -> &Self::Target {
         self.doc()
     }
@@ -47,7 +51,7 @@ impl DerefMut for TomlFile {
     }
 }
 
-/// The error emitted when failing to insert a profile into [profile]
+/// The error emitted when failing to insert into a profile.
 #[derive(Debug)]
 struct InsertProfileError {
     pub message: String,
@@ -74,7 +78,7 @@ impl TomlFile {
             return Err(InsertProfileError {
                 message: format!("Expected [{profile_str}] to be a Table"),
                 value,
-            })
+            });
         }
         // get or create the profile section
         let profile_map = if let Some(map) = self.get_mut(Config::PROFILE_SECTION) {
@@ -94,7 +98,7 @@ impl TomlFile {
             return Err(InsertProfileError {
                 message: format!("Expected [{}] to be a Table", Config::PROFILE_SECTION),
                 value,
-            })
+            });
         };
         // check the profile map for structure and existing keys
         if let Some(profile) = profile_map.get(profile_str) {
@@ -107,7 +111,7 @@ impl TomlFile {
                             profile_str
                         ),
                         value,
-                    })
+                    });
                 }
             } else {
                 return Err(InsertProfileError {
@@ -117,7 +121,7 @@ impl TomlFile {
                         profile_str
                     ),
                     value,
-                })
+                });
             }
         }
         // insert the profile
@@ -182,7 +186,7 @@ pub fn fix_tomls() -> Vec<Warning> {
             Ok(toml_file) => toml_file,
             Err(err) => {
                 warnings.push(Warning::CouldNotReadToml { path: toml, err: err.to_string() });
-                continue
+                continue;
             }
         };
 
@@ -216,7 +220,7 @@ pub fn fix_tomls() -> Vec<Warning> {
 mod tests {
     use super::*;
     use figment::Jail;
-    use pretty_assertions::assert_eq;
+    use similar_asserts::assert_eq;
 
     macro_rules! fix_test {
         ($(#[$attr:meta])* $name:ident, $fun:expr) => {

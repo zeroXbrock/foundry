@@ -68,41 +68,6 @@ pub fn abi_decode_calldata(
     Ok(res)
 }
 
-/// Helper trait for converting types to Functions. Helpful for allowing the `call`
-/// function on the EVM to be generic over `String`, `&str` and `Function`.
-pub trait IntoFunction {
-    /// Consumes self and produces a function
-    ///
-    /// # Panics
-    ///
-    /// This function does not return a Result, so it is expected that the consumer
-    /// uses it correctly so that it does not panic.
-    fn into(self) -> Function;
-}
-
-impl IntoFunction for Function {
-    fn into(self) -> Function {
-        self
-    }
-}
-
-impl IntoFunction for String {
-    #[track_caller]
-    fn into(self) -> Function {
-        IntoFunction::into(self.as_str())
-    }
-}
-
-impl<'a> IntoFunction for &'a str {
-    #[track_caller]
-    fn into(self) -> Function {
-        match get_func(self) {
-            Ok(func) => func,
-            Err(e) => panic!("could not parse function: {e}"),
-        }
-    }
-}
-
 /// Given a function signature string, it tries to parse it as a `Function`
 pub fn get_func(sig: &str) -> Result<Function> {
     Function::parse(sig).wrap_err("could not parse function signature")
@@ -125,8 +90,8 @@ pub fn get_indexed_event(mut event: Event, raw_log: &LogData) -> Event {
             if param.name.is_empty() {
                 param.name = format!("param{index}");
             }
-            if num_inputs == indexed_params ||
-                (num_address_params == indexed_params && param.ty == "address")
+            if num_inputs == indexed_params
+                || (num_address_params == indexed_params && param.ty == "address")
             {
                 param.indexed = true;
             }
@@ -154,7 +119,7 @@ pub async fn get_func_etherscan(
     for func in funcs {
         let res = encode_function_args(&func, args);
         if res.is_ok() {
-            return Ok(func)
+            return Ok(func);
         }
     }
 
@@ -194,7 +159,7 @@ pub fn find_source(
 }
 
 /// Helper function to coerce a value to a [DynSolValue] given a type string
-fn coerce_value(ty: &str, arg: &str) -> Result<DynSolValue> {
+pub fn coerce_value(ty: &str, arg: &str) -> Result<DynSolValue> {
     let ty = DynSolType::parse(ty)?;
     Ok(DynSolType::coerce_str(&ty, arg)?)
 }
@@ -233,8 +198,7 @@ mod tests {
         let param0 = B256::random();
         let param1 = vec![3; 32];
         let param2 = B256::random();
-        let log =
-            LogData::new_unchecked(vec![event.selector(), param0, param2], param1.clone().into());
+        let log = LogData::new_unchecked(vec![event.selector(), param0, param2], param1.into());
         let event = get_indexed_event(event, &log);
 
         assert_eq!(event.inputs.len(), 3);

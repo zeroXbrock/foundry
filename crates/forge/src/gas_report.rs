@@ -2,17 +2,20 @@
 
 use crate::{
     constants::{CHEATCODE_ADDRESS, HARDHAT_CONSOLE_ADDRESS},
-    hashbrown::HashSet,
-    traces::{CallTraceArena, CallTraceDecoder, CallTraceNode, DecodedCallData, TraceKind},
+    traces::{CallTraceArena, CallTraceDecoder, CallTraceNode, DecodedCallData},
 };
 use comfy_table::{presets::ASCII_MARKDOWN, *};
 use foundry_common::{calc, TestFunctionExt};
 use foundry_evm::traces::CallKind;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt::Display};
+use std::{
+    collections::{BTreeMap, HashSet},
+    fmt::Display,
+};
+use yansi::Paint;
 
 /// Represents the gas report for a set of contracts.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GasReport {
     /// Whether to report any contracts.
     report_any: bool,
@@ -22,7 +25,7 @@ pub struct GasReport {
     ignore: HashSet<String>,
     /// All contracts that were analyzed grouped by their identifier
     /// ``test/Counter.t.sol:CounterTest
-    contracts: BTreeMap<String, ContractInfo>,
+    pub contracts: BTreeMap<String, ContractInfo>,
 }
 
 impl GasReport {
@@ -49,7 +52,7 @@ impl GasReport {
                 // indicating the "double listing".
                 eprintln!(
                     "{}: {} is listed in both 'gas_reports' and 'gas_reports_ignore'.",
-                    yansi::Paint::yellow("warning").bold(),
+                    "warning".yellow().bold(),
                     contract_name
                 );
             }
@@ -61,10 +64,10 @@ impl GasReport {
     /// Analyzes the given traces and generates a gas report.
     pub async fn analyze(
         &mut self,
-        traces: &[(TraceKind, CallTraceArena)],
+        arenas: impl IntoIterator<Item = &CallTraceArena>,
         decoder: &CallTraceDecoder,
     ) {
-        for node in traces.iter().flat_map(|(_, arena)| arena.nodes()) {
+        for node in arenas.into_iter().flat_map(|arena| arena.nodes()) {
             self.analyze_node(node, decoder).await;
         }
     }
@@ -78,33 +81,33 @@ impl GasReport {
 
         // Only include top-level calls which accout for calldata and base (21.000) cost.
         // Only include Calls and Creates as only these calls are isolated in inspector.
-        if trace.depth != 1 &&
-            (trace.kind == CallKind::Call ||
-                trace.kind == CallKind::Create ||
-                trace.kind == CallKind::Create2)
+        if trace.depth > 1
+            && (trace.kind == CallKind::Call
+                || trace.kind == CallKind::Create
+                || trace.kind == CallKind::Create2
+                || trace.kind == CallKind::EOFCreate)
         {
             return;
         }
 
-        let decoded = decoder.decode_function(&node.trace).await;
-
-        let Some(name) = &decoded.contract else { return };
+        let Some(name) = decoder.contracts.get(&node.trace.address) else { return };
         let contract_name = name.rsplit(':').next().unwrap_or(name);
 
         if !self.should_report(contract_name) {
             return;
         }
 
+        let decoded = || decoder.decode_function(&node.trace);
+
         let contract_info = self.contracts.entry(name.to_string()).or_default();
         if trace.kind.is_any_create() {
             trace!(contract_name, "adding create gas info");
             contract_info.gas = trace.gas_used;
             contract_info.size = trace.data.len();
-        } else if let Some(DecodedCallData { signature, .. }) = decoded.func {
+        } else if let Some(DecodedCallData { signature, .. }) = decoded().await.call_data {
             let name = signature.split('(').next().unwrap();
             // ignore any test/setup functions
-            let should_include = !(name.is_test() || name.is_invariant_test() || name.is_setup());
-            if should_include {
+            if !name.test_function_kind().is_known() {
                 trace!(contract_name, signature, "adding gas info");
                 let gas_info = contract_info
                     .functions
@@ -141,7 +144,7 @@ impl Display for GasReport {
         for (name, contract) in &self.contracts {
             if contract.functions.is_empty() {
                 trace!(name, "gas report contract without functions");
-                continue
+                continue;
             }
 
             let mut table = Table::new();
@@ -186,7 +189,7 @@ impl Display for GasReport {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ContractInfo {
     pub gas: u64,
     pub size: usize,
@@ -194,7 +197,7 @@ pub struct ContractInfo {
     pub functions: BTreeMap<String, BTreeMap<String, GasInfo>>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct GasInfo {
     pub calls: Vec<u64>,
     pub min: u64,

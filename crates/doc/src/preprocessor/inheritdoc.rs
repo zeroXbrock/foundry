@@ -5,7 +5,7 @@ use crate::{
 use forge_fmt::solang_ext::SafeUnwrap;
 use std::collections::HashMap;
 
-/// [ContractInheritance] preprocessor id.
+/// [`Inheritdoc`] preprocessor ID.
 pub const INHERITDOC_ID: PreprocessorId = PreprocessorId("inheritdoc");
 
 /// The inheritdoc preprocessor.
@@ -80,7 +80,7 @@ impl Inheritdoc {
                             // TODO: improve matching logic
                             if source.ident() == children.source.ident() {
                                 let key = format!("{}.{}", base, source.ident());
-                                return Some((key, children.comments.clone()))
+                                return Some((key, children.comments.clone()));
                             }
                         }
                     }

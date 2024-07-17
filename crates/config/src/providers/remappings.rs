@@ -3,7 +3,7 @@ use figment::{
     value::{Dict, Map},
     Error, Metadata, Profile, Provider,
 };
-use foundry_compilers::remappings::{RelativeRemapping, Remapping};
+use foundry_compilers::artifacts::remappings::{RelativeRemapping, Remapping};
 use std::{
     borrow::Cow,
     collections::{btree_map::Entry, BTreeMap, HashSet},
@@ -102,6 +102,7 @@ impl<'a> RemappingsProvider<'a> {
         trace!("get all remappings from {:?}", self.root);
         /// prioritizes remappings that are closer: shorter `path`
         ///   - ("a", "1/2") over ("a", "1/2/3")
+        ///
         /// grouped by remapping context
         fn insert_closest(
             mappings: &mut BTreeMap<Option<String>, BTreeMap<String, PathBuf>>,
@@ -150,7 +151,7 @@ impl<'a> RemappingsProvider<'a> {
         let mut all_remappings = Remappings::new_with_remappings(user_remappings);
 
         // scan all library dirs and autodetect remappings
-        // todo: if a lib specifies contexts for remappings manually, we need to figure out how to
+        // TODO: if a lib specifies contexts for remappings manually, we need to figure out how to
         // resolve that
         if self.auto_detect_remappings {
             let mut lib_remappings = BTreeMap::new();
@@ -163,15 +164,13 @@ impl<'a> RemappingsProvider<'a> {
                 .lib_paths
                 .iter()
                 .map(|lib| self.root.join(lib))
-                .inspect(|lib| {
-                    trace!("find all remappings in lib path: {:?}", lib);
-                })
-                .flat_map(Remapping::find_many)
+                .inspect(|lib| trace!(?lib, "find all remappings"))
+                .flat_map(|lib| Remapping::find_many(&lib))
             {
                 // this is an additional safety check for weird auto-detected remappings
                 if ["lib/", "src/", "contracts/"].contains(&r.name.as_str()) {
                     trace!(target: "forge", "- skipping the remapping");
-                    continue
+                    continue;
                 }
                 insert_closest(&mut lib_remappings, r.context, r.name, r.path.into());
             }
@@ -253,7 +252,7 @@ impl<'a> Provider for RemappingsProvider<'a> {
                 if let figment::error::Kind::MissingField(_) = err.kind {
                     self.get_remappings(vec![])
                 } else {
-                    return Err(err.clone())
+                    return Err(err.clone());
                 }
             }
         }?;

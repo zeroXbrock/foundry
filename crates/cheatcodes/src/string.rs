@@ -1,7 +1,8 @@
-//! Implementations of [`String`](crate::Group::String) cheatcodes.
+//! Implementations of [`String`](spec::Group::String) cheatcodes.
 
 use crate::{Cheatcode, Cheatcodes, Result, Vm::*};
 use alloy_dyn_abi::{DynSolType, DynSolValue};
+use alloy_primitives::{hex, U256};
 use alloy_sol_types::SolValue;
 
 // address
@@ -135,6 +136,14 @@ impl Cheatcode for splitCall {
     }
 }
 
+// indexOf
+impl Cheatcode for indexOfCall {
+    fn apply(&self, _state: &mut Cheatcodes) -> Result {
+        let Self { input, key } = self;
+        Ok(input.find(key).map(U256::from).unwrap_or(U256::MAX).abi_encode())
+    }
+}
+
 pub(super) fn parse(s: &str, ty: &DynSolType) -> Result {
     parse_value(s, ty).map(|v| v.abi_encode())
 }
@@ -157,7 +166,7 @@ where
 }
 
 #[instrument(target = "cheatcodes", level = "debug", skip(ty), fields(%ty), ret)]
-fn parse_value(s: &str, ty: &DynSolType) -> Result<DynSolValue> {
+pub(super) fn parse_value(s: &str, ty: &DynSolType) -> Result<DynSolValue> {
     match ty.coerce_str(s) {
         Ok(value) => Ok(value),
         Err(e) => match parse_value_fallback(s, ty) {
@@ -183,10 +192,10 @@ fn parse_value_fallback(s: &str, ty: &DynSolType) -> Option<Result<DynSolValue, 
             };
             return Some(Ok(DynSolValue::Bool(b)));
         }
-        DynSolType::Int(_) |
-        DynSolType::Uint(_) |
-        DynSolType::FixedBytes(_) |
-        DynSolType::Bytes => {
+        DynSolType::Int(_)
+        | DynSolType::Uint(_)
+        | DynSolType::FixedBytes(_)
+        | DynSolType::Bytes => {
             if !s.starts_with("0x") && s.chars().all(|c| c.is_ascii_hexdigit()) {
                 return Some(Err("missing hex prefix (\"0x\") for hex string"));
             }
